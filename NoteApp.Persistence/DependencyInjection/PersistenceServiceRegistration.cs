@@ -15,7 +15,10 @@ public static class PersistenceServiceRegistration
         services.AddDbContext<NoteAppDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
+        // Repository servisleri
         services.AddScoped<INoteRepository, NoteRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
 
         return services;
     }

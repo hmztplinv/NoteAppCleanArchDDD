@@ -1,13 +1,11 @@
+using Microsoft.OpenApi.Models;
 using NoteApp.API.Middleware;
 using NoteApp.Application.DependencyInjection;
+using NoteApp.Infrastructure.DependencyInjection;
 using NoteApp.Persistence.Contexts;
 using NoteApp.Persistence.DependencyInjection;
 using NoteApp.Persistence.Seed;
 using Serilog;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,36 +19,108 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-
-// Register Application & Persistence services
+// Register Application & Persistence & Infrastructure services
 builder.Services.AddApplicationServices();
 builder.Services.AddPersistenceServices(builder.Configuration);
+builder.Services.AddInfrastructureServices(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// Swagger JWT Authentication desteği
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { 
+        Title = "NoteApp API", 
+        Version = "v1",
+        Description = "JWT Authentication ve Role-based Authorization ile güvenli bir API."
+    });
+    
+    // JWT Authentication için güvenlik tanımı
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header. Örnek: 'Bearer {token}'",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = ParameterLocation.Header
+            },
+            new List<string>()
+        }
+    });
+});
+
+// CORS Politikası ekle (gerekirse)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", builder =>
+    {
+        builder.AllowAnyOrigin()
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
+});
 
 var app = builder.Build();
 
-
-
 // SEED DATABASE
-using (var scope = app.Services.CreateScope())
+try
 {
-    var context = scope.ServiceProvider.GetRequiredService<NoteAppDbContext>();
-    await SeedData.InitializeAsync(context);
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<NoteAppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
+        logger.LogInformation("Veritabanı seed işlemi başlatılıyor...");
+        await SeedData.InitializeAsync(context);
+        logger.LogInformation("Veritabanı seed işlemi tamamlandı.");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Seed işlemi sırasında bir hata oluştu: {ex.Message}");
+    Console.WriteLine($"StackTrace: {ex.StackTrace}");
+    // Uygulama başlangıcını engellemeden hata loglanır
 }
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c => 
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "NoteApp API v1");
+        c.RoutePrefix = "swagger";
+        c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
+        c.DefaultModelsExpandDepth(-1); // Models bölümünü gizle
+    });
 }
+
 // Configure middleware
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseHttpsRedirection();
-// app.UseAuthentication();
+
+// Cors middleware
+app.UseCors("AllowAll");
+
+// Authentication ve Authorization middleware'lerini etkinleştir
+app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 app.Run();

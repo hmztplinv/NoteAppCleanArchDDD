@@ -12,8 +12,13 @@ public class NoteConfiguration : IEntityTypeConfiguration<Note>
         builder.HasKey(n => n.Id);
         builder.Property(n => n.Title).IsRequired().HasMaxLength(200);
         builder.Property(n => n.Content).IsRequired();
+        
+        // Kategori ilişkisi
         builder.HasOne(n => n.Category)
                .WithMany(c => c.Notes)
                .HasForeignKey(n => n.CategoryId);
+               
+        // Kullanıcı ilişkisi - NoAction olduğundan burada belirtmeye gerek yok
+        // UserConfiguration sınıfında tanımlanmış durumda
     }
 }
