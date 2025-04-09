@@ -46,35 +46,37 @@ public class UserService : IUserService
         return await VerifyPasswordHashAsync(password, user.PasswordHash, user.PasswordSalt);
     }
 
-    public async Task<(bool success, string passwordHash, string passwordSalt)> CreatePasswordHashAsync(string password)
+    public Task<(bool success, string passwordHash, string passwordSalt)> CreatePasswordHashAsync(string password)
     {
         try
         {
             using var hmac = new HMACSHA512();
             var passwordSalt = Convert.ToBase64String(hmac.Key);
             var passwordHash = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(password)));
-            
-            return (true, passwordHash, passwordSalt);
+
+            return Task.FromResult((true, passwordHash, passwordSalt));
         }
         catch
         {
-            return (false, string.Empty, string.Empty);
+            return Task.FromResult((false, string.Empty, string.Empty));
         }
     }
 
-    public async Task<bool> VerifyPasswordHashAsync(string password, string storedHash, string storedSalt)
+
+    public Task<bool> VerifyPasswordHashAsync(string password, string storedHash, string storedSalt)
     {
         try
         {
             var saltBytes = Convert.FromBase64String(storedSalt);
             using var hmac = new HMACSHA512(saltBytes);
             var computedHash = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(password)));
-            
-            return computedHash == storedHash;
+
+            return Task.FromResult(computedHash == storedHash);
         }
         catch
         {
-            return false;
+            return Task.FromResult(false);
         }
     }
+
 }
